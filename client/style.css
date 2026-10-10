@@ -1,0 +1,350 @@
+/* #### BASE #### */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    color: white;
+    background: #0b1033;
+    background-image:
+        radial-gradient(circle at 10% 90%, rgba(139, 92, 246, 0.4), transparent 40%),
+        radial-gradient(circle at 90% 10%, rgba(59, 130, 246, 0.4), transparent 35%);
+    min-height: 100vh;
+}
+
+/* le gris qu'on utilise un peu partout */
+.sous-titre, .aide, .icone, .btn-oeil, .separateur, .moi, .apercu, .statut, .heure, #statut-destinataire {
+    color: #8a90b8;
+}
+
+
+/* #### CONNEXION #### */
+
+/* pour centrer la carte */
+#zone-connexion {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.carte-connexion {
+    width: 100%;
+    max-width: 420px;
+    padding: 40px 30px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    text-align: center;
+}
+
+/* icone + input + oeil sur la même ligne */
+.champ {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    margin-bottom: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+}
+
+.champ input {
+    flex: 1;
+    padding: 16px 0;
+    background: none;
+    border: none;
+    outline: none;
+    color: white;
+}
+
+.btn-oeil {
+    background: none;
+    border: none;
+}
+
+.bouton {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+    color: white;
+    font-weight: bold;
+}
+
+.separateur {
+    margin: 20px 0;
+}
+
+.bascule a {
+    color: #8b8cf6;
+    text-decoration: none;
+}
+
+#message-erreur {
+    color: #f87171;
+}
+
+
+/* #### MESSAGERIE (version ordinateur) #### */
+
+/* la grande fenêtre avec les 3 colonnes */
+/* attention : dans le js il faudra mettre display = "flex" pour l'afficher */
+#zone-messagerie {
+    display: flex;
+    max-width: 1200px;
+    height: calc(100vh - 40px);
+    margin: 20px auto;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+/* colonne des logos */
+#navigation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.onglet {
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 12px;
+    background: none;
+    color: #8a90b8;
+}
+
+.onglet.actif {
+    background: rgba(139, 92, 246, 0.3);
+    color: white;
+}
+
+/* la déconnexion tout en bas */
+#btn-deconnexion {
+    margin-top: auto;
+}
+
+/* colonne de la liste */
+#panneau-liste {
+    width: 320px;
+    padding: 20px;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    overflow-y: auto;
+}
+
+#titre-liste {
+    margin: 0;
+}
+
+/* une ligne de la liste (conversation ou personne), créée par le js */
+.conversation, .utilisateur {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    cursor: pointer;
+}
+
+.conversation.actif {
+    background: rgba(139, 92, 246, 0.3);
+}
+
+.infos {
+    flex: 1;
+}
+
+.nom, .apercu, .statut, #nom-destinataire, #statut-destinataire {
+    margin: 0;
+}
+
+.nom, #nom-destinataire {
+    font-weight: bold;
+}
+
+.badge {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: #8b5cf6;
+    font-size: 12px;
+}
+
+/* le rond dégradé + la pastille en ligne */
+.avatar {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+}
+
+.pastille {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #0b1033;
+    background: gray;
+}
+
+.pastille.en-ligne {
+    background: #22c55e;
+}
+
+
+/* #### CONVERSATION #### */
+
+#panneau-conversation {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.entete-conversation {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* la flèche retour n'existe que sur mobile */
+.btn-retour {
+    display: none;
+    background: none;
+    border: none;
+    color: white;
+}
+
+/* les messages */
+#historique {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bulle {
+    max-width: 60%;
+    padding: 10px 14px;
+    border-radius: 16px;
+}
+
+/* reçu = à gauche, gris transparent */
+.bulle.recue {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* envoyé = à droite, dégradé */
+.bulle.envoyee {
+    align-self: flex-end;
+    background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+}
+
+.bulle .heure {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    text-align: right;
+}
+
+/* la barre pour écrire */
+.barre-envoi {
+    display: flex;
+    gap: 10px;
+    padding: 16px 20px;
+}
+
+#champ-message {
+    flex: 1;
+    padding: 14px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 25px;
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+    outline: none;
+}
+
+.bouton-rond {
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+    color: white;
+}
+
+
+/* #### TELEPHONE (écran de moins de 768px) #### */
+
+@media (max-width: 768px) {
+
+    #zone-messagerie {
+        flex-direction: column;
+        height: 100vh;
+        margin: 0;
+        border: none;
+        border-radius: 0;
+    }
+
+    /* les logos passent en haut, en ligne */
+    #navigation {
+        flex-direction: row;
+        padding: 10px;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #btn-deconnexion {
+        margin-top: 0;
+        margin-left: auto;
+    }
+
+    #panneau-liste {
+        width: 100%;
+        flex: 1;
+        border-right: none;
+    }
+
+    /* au départ on voit la liste, pas la conversation */
+    #panneau-conversation {
+        display: none;
+    }
+
+    /* quand on ouvre une conversation, le js ajoute la classe "conversation-ouverte" */
+    #zone-messagerie.conversation-ouverte #navigation,
+    #zone-messagerie.conversation-ouverte #panneau-liste {
+        display: none;
+    }
+
+    #zone-messagerie.conversation-ouverte #panneau-conversation {
+        display: flex;
+    }
+
+    .btn-retour {
+        display: block;
+    }
+
+    .bulle {
+        max-width: 80%;
+    }
+}

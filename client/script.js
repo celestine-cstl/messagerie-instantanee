@@ -45,22 +45,23 @@ document.getElementById("btn-oeil-inscription").addEventListener("click", functi
 
 // même règle que dans le contrat : 6 caractères, une majuscule, un chiffre
 function mdpValide(mdp) {
-    return mdp.length >= 6 && /[A-Z]/.test(mdp) && /[0-9]/.test(mdp);
+    return mdp.length >= 6 && mdp.length <= 30 && /[A-Z]/.test(mdp) && /[0-9]/.test(mdp);
 }
 
-document.getElementById("btn-inscription").addEventListener("click", function () {
+document.getElementById("btn-inscription").addEventListener("click", async function () {
     const username = document.getElementById("inscription-username").value.trim();
     const mdp = document.getElementById("inscription-mdp").value;
+    const aideMdp = document.getElementById("aide-mdp");
+
+    messageErreur.style.color = "";
 
     if (username === "" || mdp === "") {
-        messageErreur.textContent = "Remplis tous les champs";
+        messageErreur.textContent = "Remplissez tous les champs";
         return;
     }
 
-        const aideMdp = document.getElementById("aide-mdp");
-
     if (!mdpValide(mdp)) {
-        aideMdp.style.color = "#f87171";
+        aideMdp.style.color = "#bc3636";
         messageErreur.textContent = "";
         return;
     }
@@ -68,5 +69,27 @@ document.getElementById("btn-inscription").addEventListener("click", function ()
     aideMdp.style.color = "";
     messageErreur.textContent = "";
 
-    console.log("inscription ok côté page :", username);
+    try {
+        const reponse = await fetch("/api/comptes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username, motDePasse: mdp })
+        });
+        const donnees = await reponse.json();
+
+        if (reponse.status === 201) {
+            // compte créé : on repasse sur la connexion avec le nom déjà rempli
+            blocInscription.style.display = "none";
+            blocConnexion.style.display = "block";
+            document.getElementById("login-username").value = donnees.username;
+            document.getElementById("inscription-mdp").value = "";
+            messageErreur.style.color = "#4ade80";
+            messageErreur.textContent = "Votre compte a bien été créé, vous pouvez vous connecter";
+        } else {
+            // erreur envoyée par le serveur (nom déjà pris, etc)
+            messageErreur.textContent = donnees.error;
+        }
+    } catch (e) {
+        messageErreur.textContent = "Impossible de joindre le serveur";
+    }
 });

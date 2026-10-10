@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Réglages locaux de VS Code (propres à chaque ordinateur)
+.vscode/

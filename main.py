@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header, Depends
 from fastapi.staticfiles import StaticFiles
 from base_de_donnees import Base, moteur, SessionLocale
 from entites import Utilisateur
@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 import bcrypt
+from datetime import datetime, timedelta, timezone
+import jwt
 
 # crée les tables dans mysql si elles n'existent pas encore
 Base.metadata.create_all(moteur)
@@ -34,7 +36,7 @@ class CompteRequest(BaseModel):
     username: str
     motDePasse: str
 
-# Règle du mdp : au moins 6 caractères, une majuscule et un chiffre
+# Règle du mdp : 6 à 30 caractères, une majuscule et un chiffre
 def mdp_valide(mdp):
     a_majuscule = any(c.isupper() for c in mdp)
     a_chiffre = any(c.isdigit() for c in mdp)
@@ -63,9 +65,54 @@ def creer_compte(compte: CompteRequest):
     finally:
         session.close()
 
+# JWT
+SECRET = "mySecretKeyMySecretKeyMySecretKey123!"
+
+def generer_token(id_utilisateur, username):
+    maintenant = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(id_utilisateur),
+        "username": username,
+        "iat": maintenant,
+        "exp": maintenant + timedelta(hours=1),
+    }
+    return jwt.encode(payload, SECRET, algorithm="HS256")
+
+def verifier_token(token):
+    try:
+        return jwt.decode(token, SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+
+# vérifie le token avant les routes protégées
+def utilisateur_courant(authorization: str = Header(default=None)):
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token manquant")
+    donnees = verifier_token(authorization.replace("Bearer ", ""))
+    if donnees is None:
+        raise HTTPException(status_code=401, detail="Token invalide ou expiré")
+    return donnees
+
+# CONNEXION
+@app.post("/api/auth/login")
+def login(identifiants: CompteRequest):
+    # trop long = forcément faux (et bcrypt plante au dessus de 72 octets)
+    if len(identifiants.motDePasse) > 30:
+        raise HTTPException(status_code=401, detail="Identifiants ou mot de passes invalides")
+    session = SessionLocale()
+    try:
+        u = session.query(Utilisateur).filter_by(username=identifiants.username.strip()).first()
+        # même message que le nom ou le mdp soit faux
+        if u is None or not bcrypt.checkpw(identifiants.motDePasse.encode(), u.motDePasse.encode()):
+            raise HTTPException(status_code=401, detail="Identifiants ou mot de passes invalides")
+        token = generer_token(u.id, u.username)
+        return {"token": token, "id": u.id, "username": u.username}
+    finally:
+        session.close()
+
 # UTILISATEURS
 @app.get("/api/utilisateurs")
-def lister_utilisateurs():
+def lister_utilisateurs(moi: dict = Depends(utilisateur_courant)):
     session = SessionLocale()
     try:
         utilisateurs = session.query(Utilisateur).all()

@@ -1,4 +1,4 @@
-/* #### BASE #### */
+/* #### BASE COMMUNE #### */
 
 * {
     box-sizing: border-box;
@@ -42,7 +42,7 @@ body {
     text-align: center;
 }
 
-/* icone + input + oeil sur la même ligne */
+/* icone + entrée mdp + oeil sur la même ligne */
 .champ {
     display: flex;
     align-items: center;
@@ -103,10 +103,9 @@ body {
 /* #### MESSAGERIE (version ordinateur) #### */
 
 /* la grande fenêtre avec les 3 colonnes */
-/* attention : dans le js il faudra mettre display = "flex" pour l'afficher */
 #zone-messagerie {
     display: flex;
-    max-width: 1200px;
+    max-width: 90%;
     height: calc(100vh - 40px);
     margin: 20px auto;
     background: rgba(255, 255, 255, 0.04);
@@ -156,7 +155,6 @@ body {
     margin: 0;
 }
 
-/* une ligne de la liste (conversation ou personne), créée par le js */
 .conversation, .utilisateur {
     display: flex;
     align-items: center;
@@ -233,7 +231,7 @@ body {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* la flèche retour n'existe que sur mobile */
+/* la flèche retour n'existe que sur mobile pour opti la place*/
 .btn-retour {
     display: none;
     background: none;
@@ -257,13 +255,13 @@ body {
     border-radius: 16px;
 }
 
-/* reçu = à gauche, gris transparent */
+/* reçu > à gauche, gris transparent */
 .bulle.recue {
     align-self: flex-start;
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* envoyé = à droite, dégradé */
+/* envoyé > à droite, dégradé */
 .bulle.envoyee {
     align-self: flex-end;
     background: linear-gradient(90deg, #8b5cf6, #3b82f6);
@@ -303,13 +301,19 @@ body {
 }
 
 
-/* #### TELEPHONE (écran de moins de 768px) #### */
+/* #### TELEPHONE #### */
 
 @media (max-width: 768px) {
-
     #zone-messagerie {
+        /* collée aux 4 bords de l'écran visible pour que ça marche sur tous les téléphones */
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         flex-direction: column;
-        height: 100vh;
+        max-width: none;
+        height: auto;
         margin: 0;
         border: none;
         border-radius: 0;
@@ -334,7 +338,7 @@ body {
         border-right: none;
     }
 
-    /* au départ on voit la liste, pas la conversation */
+    /* au départ on voit la liste des conversations pas la conversation */
     #panneau-conversation {
         display: none;
     }

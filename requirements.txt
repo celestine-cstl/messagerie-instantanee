@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+websockets
+pyjwt
+bcrypt
+sqlalchemy
+mysql-connector-python

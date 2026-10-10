@@ -221,3 +221,6 @@ __marimo__/
 
 # Réglages locaux de VS Code (propres à chaque ordinateur)
 .vscode/
+
+# mot de passe MySQL
+config.py

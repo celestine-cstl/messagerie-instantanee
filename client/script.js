@@ -57,12 +57,16 @@ document.getElementById("btn-inscription").addEventListener("click", function ()
         return;
     }
 
+        const aideMdp = document.getElementById("aide-mdp");
+
     if (!mdpValide(mdp)) {
-        messageErreur.textContent = "Mot de passe : 6 caractères minimum, une majuscule et un chiffre";
+        aideMdp.style.color = "#f87171";
+        messageErreur.textContent = "";
         return;
     }
 
+    aideMdp.style.color = "";
     messageErreur.textContent = "";
-    // à faire : envoyer au serveur (POST /api/comptes) quand celui de Lina sera prêt
+
     console.log("inscription ok côté page :", username);
 });

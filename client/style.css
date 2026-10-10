@@ -77,6 +77,15 @@ body {
     font-weight: bold;
 }
 
+/* effet quand on clique sur un bouton */
+.bouton, .bouton-rond, .onglet {
+    transition: transform 0.1s;
+}
+
+.bouton:active, .bouton-rond:active, .onglet:active {
+    transform: scale(0.95);
+}
+
 .separateur {
     margin: 20px 0;
 }

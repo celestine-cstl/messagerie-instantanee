@@ -38,15 +38,17 @@ class CompteRequest(BaseModel):
 def mdp_valide(mdp):
     a_majuscule = any(c.isupper() for c in mdp)
     a_chiffre = any(c.isdigit() for c in mdp)
-    return len(mdp) >= 6 and a_majuscule and a_chiffre
+    return 6 <= len(mdp) <= 30 and a_majuscule and a_chiffre
 
 @app.post("/api/comptes", status_code=201)
 def creer_compte(compte: CompteRequest):
     username = compte.username.strip()
     if username == "" or compte.motDePasse == "":
         raise HTTPException(status_code=400, detail="Tous les champs sont obligatoires")
+    if len(username) > 50:
+        raise HTTPException(status_code=400, detail="Nom d'utilisateur trop long (50 caractères max)")
     if not mdp_valide(compte.motDePasse):
-        raise HTTPException(status_code=400, detail="Mot de passe : 6 caractères minimum, une majuscule et un chiffre")
+        raise HTTPException(status_code=400, detail="Mot de passe incorrect : 6 à 30 caractères, une majuscule et un chiffre")
     session = SessionLocale()
     try:
         # le username doit être unique

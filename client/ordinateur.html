@@ -79,9 +79,9 @@
                     </button>
                 </div>
 
-                <p class="aide" id="aide-mdp">Entre 6 et 30 caractères, une majuscule et un chiffre</p>
                 <button id="btn-inscription" class="bouton">Créer mon compte</button>
-
+                <!-- caché en temps normal > s'affiche en rouge seulement si le mot de passe ne respecte pas la règle de secur-->
+                <p class="aide" id="aide-mdp" style="display: none;">Le mot de passe doit faire entre 6 et 30 caractères, avec une majuscule et un chiffre</p>
                 <div class="separateur"><span>ou</span></div>
 
                 <p class="bascule">
@@ -107,7 +107,7 @@
                 </svg>
             </button>
             <!-- logo personne pour voir tous les utiliosateurs inscrits -->
-            <button id="onglet-personnes" class="onglet" title="Personnes">
+            <button id="onglet-personnes" class="onglet" title="Utilisateurs">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="9" cy="8" r="4"/>
                     <path d="M2 21c0-4 3-6 7-6s7 2 7 6"/>
@@ -129,11 +129,8 @@
         <!-- la liste à gauche -->
         <div id="panneau-liste">
             <h2 id="titre-liste">Messages</h2>
-            <p class="moi">Connecté en tant que <span id="mon-username"></span></p>
-
             <!-- onglet messages : les conversations -->
             <div id="liste-conversations"></div>
-
             <!-- onglet des utilisateurs -->
             <div id="liste-utilisateurs" style="display: none;"></div>
         </div>

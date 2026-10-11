@@ -16,10 +16,9 @@ body {
 }
 
 /* le gris qu'on utilise un peu partout */
-.sous-titre, .aide, .icone, .btn-oeil, .separateur, .moi, .apercu, .statut, .heure, #statut-destinataire {
+.sous-titre, .aide, .icone, .btn-oeil, .separateur, .vide, .apercu, .statut, .heure, #statut-destinataire {
     color: #8a90b8;
 }
-
 
 /* #### CONNEXION #### */
 

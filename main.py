@@ -8,6 +8,8 @@ from pydantic import BaseModel
 import bcrypt
 from datetime import datetime, timedelta, timezone
 import jwt
+from sqlalchemy import or_, and_
+from entites import Utilisateur, Message
 
 # crée les tables dans mysql si elles n'existent pas encore
 Base.metadata.create_all(moteur)
@@ -119,5 +121,37 @@ def lister_utilisateurs(moi: dict = Depends(utilisateur_courant)):
         return [{"id": u.id, "username": u.username, "connecte": False} for u in utilisateurs]
     finally:
         session.close()
+
+
+# #### HISTORIQUE ####
+
+@app.get("/api/messages/{utilisateurId}")
+def historique(utilisateurId: int, payload: dict = Depends(utilisateur_courant)):
+    moi = int(payload["sub"])
+    session = SessionLocale()
+
+    if session.get(Utilisateur, utilisateurId) is None:
+        session.close()
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    # les messages dans les deux sens, du plus vieux au plus récent
+    messages = session.query(Message).filter(
+        or_(
+            and_(Message.expediteurId == moi, Message.destinataireId == utilisateurId),
+            and_(Message.expediteurId == utilisateurId, Message.destinataireId == moi)
+        )
+    ).order_by(Message.dateEnvoi).all()
+    session.close()
+
+    return [
+        {
+            "id": m.id,
+            "expediteurId": m.expediteurId,
+            "destinataireId": m.destinataireId,
+            "contenu": m.contenu,
+            "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds")
+        }
+        for m in messages
+    ]
 
 app.mount("/", StaticFiles(directory="client", html=True), name="client")

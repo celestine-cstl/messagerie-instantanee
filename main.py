@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Header, Depends
+from fastapi import FastAPI, HTTPException, Request, Header, Depends, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from base_de_donnees import Base, moteur, SessionLocale
 from entites import Utilisateur
@@ -118,7 +118,7 @@ def lister_utilisateurs(moi: dict = Depends(utilisateur_courant)):
     session = SessionLocale()
     try:
         utilisateurs = session.query(Utilisateur).all()
-        return [{"id": u.id, "username": u.username, "connecte": False} for u in utilisateurs]
+        return [{"id": u.id, "username": u.username, "connecte": u.id in connectes} for u in utilisateurs]
     finally:
         session.close()
 
@@ -153,5 +153,67 @@ def historique(utilisateurId: int, payload: dict = Depends(utilisateur_courant))
         }
         for m in messages
     ]
+
+# #### WEBSOCKET ####
+
+connectes = {}  # id de l'utilisateur -> sa connexion websocket
+
+# prévient tout le monde que quelqu'un s'est connecté ou déconnecté
+async def prevenir_statut():
+    for ws in list(connectes.values()):
+        try:
+            await ws.send_json({"type": "statut"})
+        except Exception:
+            pass
+
+@app.websocket("/ws/messages")
+async def canal_messages(websocket: WebSocket, token: str = ""):
+    # pas de token valide = pas de connexion
+    try:
+        payload = verifier_token(token)
+        moi = int(payload["sub"])
+    except Exception:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    connectes[moi] = websocket
+    await prevenir_statut()
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            contenu = str(data.get("contenu", "")).strip()
+            destinataireId = data.get("destinataireId")
+            if contenu == "" or destinataireId is None:
+                continue
+
+            # on enregistre avec l'heure du serveur
+            session = SessionLocale()
+            m = Message(expediteurId=moi, destinataireId=int(destinataireId),
+                        contenu=contenu, dateEnvoi=datetime.now())
+            session.add(m)
+            session.commit()
+            session.refresh(m)
+            session.close()
+
+            message = {
+                "type": "message",
+                "expediteurId": m.expediteurId,
+                "destinataireId": m.destinataireId,
+                "contenu": m.contenu,
+                "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds")
+            }
+
+            await websocket.send_json(message)
+            if m.destinataireId in connectes and m.destinataireId != moi:
+                await connectes[m.destinataireId].send_json(message)
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if connectes.get(moi) is websocket:
+            del connectes[moi]
+        await prevenir_statut()
 
 app.mount("/", StaticFiles(directory="client", html=True), name="client")

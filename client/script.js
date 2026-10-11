@@ -7,6 +7,7 @@ const messageErreur = document.getElementById("message-erreur");
 let token = null;
 let monId = null;
 let monUsername = null;
+let socket = null;
 
 // #### PASSER DE LA CONNEXION A L'INSCRIPTION ####
 
@@ -141,12 +142,32 @@ function ouvrirMessagerie() {
     document.getElementById("zone-messagerie").style.display = "flex";
     messageErreur.textContent = "";
     afficherOnglet("messages");
+    connecterSocket();
 }
+
+// appuyer sur Entrée = cliquer sur le bouton de connexion
+function entreeValide(idChamp, idBouton) {
+    document.getElementById(idChamp).addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+            document.getElementById(idBouton).click();
+        }
+    });
+}
+
+entreeValide("login-username", "btn-connexion");
+entreeValide("login-mdp", "btn-connexion");
+entreeValide("inscription-username", "btn-inscription");
+entreeValide("inscription-mdp", "btn-inscription");
 
 
 // #### DECONNEXION ####
 
 function deconnecter() {
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
+
     // on oublie le token
     token = null;
     monId = null;
@@ -178,8 +199,7 @@ function afficherOnglet(nom) {
     document.getElementById("onglet-personnes").classList.toggle("actif", !estMessages);
 
     if (estMessages) {
-        document.getElementById("liste-conversations").innerHTML =
-            '<p class="vide">Pas encore de conversation. Va dans l\'onglet "Utilisateurs" pour écrire à quelqu\'un.</p>';
+        chargerConversations();
     } else {
         chargerUtilisateurs();
     }
@@ -233,6 +253,10 @@ async function chargerUtilisateurs() {
             });
 
             liste.appendChild(ligne);
+
+            if (destinataire && u.id === destinataire.id) {
+                afficherStatut(u.connecte);
+            }
         }
 
         if (liste.innerHTML === "") {
@@ -243,19 +267,88 @@ async function chargerUtilisateurs() {
     }
 }
 
+// #### LISTE DES CONVERSATIONS ####
+
+async function chargerConversations() {
+    try {
+        const reponse = await fetch("/api/conversations", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (reponse.status === 401) {
+            deconnecter();
+            messageErreur.textContent = "Session expirée, reconnecte-toi";
+            return;
+        }
+
+        const conversations = await reponse.json();
+        const liste = document.getElementById("liste-conversations");
+        liste.innerHTML = "";
+
+        for (const c of conversations) {
+            const ligne = document.createElement("div");
+            ligne.className = "conversation";
+            ligne.innerHTML = `
+                <div class="avatar"><span class="pastille ${c.connecte ? "en-ligne" : ""}"></span></div>
+                <div class="infos">
+                    <p class="nom"></p>
+                    <p class="apercu"></p>
+                </div>
+                <span class="heure">${c.dateEnvoi.slice(11, 16)}</span>`;
+            ligne.querySelector(".nom").textContent = c.username;
+            ligne.querySelector(".apercu").textContent = c.dernierMessage;
+
+            ligne.addEventListener("click", function () {
+                ouvrirConversation(c);
+            });
+
+            liste.appendChild(ligne);
+        }
+
+        if (conversations.length === 0) {
+            liste.innerHTML = '<p class="vide">Pas encore de conversation. Va dans l\'onglet "Utilisateurs" pour écrire à quelqu\'un.</p>';
+        }
+    } catch (e) {
+        messageErreur.textContent = "Impossible de joindre le serveur";
+    }
+}
 
 // #### OUVRIR UNE CONVERSATION ####
 
-function ouvrirConversation(u) {
+async function ouvrirConversation(u) {
     destinataire = u;
 
     document.getElementById("nom-destinataire").textContent = u.username;
-    document.getElementById("statut-destinataire").textContent = u.connecte ? "En ligne" : "Hors ligne";
-    document.getElementById("pastille-destinataire").classList.toggle("en-ligne", u.connecte);
+    afficherStatut(u.connecte);
     document.getElementById("historique").innerHTML = "";
-    // sur téléphone : on passe à l'écran de la conversation
+    // sur téléphone >> on passe à l'écran de la conversation pour opti l'espace
     document.getElementById("zone-messagerie").classList.add("conversation-ouverte");
+
+    // on récupère les anciens messages des conversztiond
+    try {
+        const reponse = await fetch("/api/messages/" + u.id, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (reponse.status === 401) {
+            deconnecter();
+            messageErreur.textContent = "Session expirée, reconnecte-toi";
+            return;
+        }
+        const messages = await reponse.json();
+        for (const m of messages) {
+            afficherBulle(m);
+        }
+    } catch (e) {
+        messageErreur.textContent = "Impossible de joindre le serveur";
+    }
 }
+
+// pastille avec texte en ligne ou hors ligne 
+function afficherStatut(connecte) {
+    document.getElementById("statut-destinataire").textContent = connecte ? "En ligne" : "Hors ligne";
+    document.getElementById("pastille-destinataire").classList.toggle("en-ligne", connecte);
+}
+
 // la flèche retour n'existe que sur la page mobile pour opti la place
 const btnRetour = document.getElementById("btn-retour");
 if (btnRetour) {
@@ -263,3 +356,65 @@ if (btnRetour) {
         document.getElementById("zone-messagerie").classList.remove("conversation-ouverte");
     });
 }
+
+// #### WEBSOCKET ####
+
+function connecterSocket() {
+    socket = new WebSocket("ws://" + location.host + "/ws/messages?token=" + token);
+
+    // à chaque fois que le serveur nous envoie quelque chose
+    socket.addEventListener("message", function (e) {
+        const data = JSON.parse(e.data);
+
+        if (data.type === "statut") {
+            // si quelqu'un s'est connecté ou déconnecté >> on redemande les listes
+            chargerUtilisateurs();
+            chargerConversations();
+        } else if (data.type === "message") {
+            if (destinataire && (data.expediteurId === destinataire.id || data.destinataireId === destinataire.id)) {
+                afficherBulle(data);
+            }
+            // le dernier message change >> on met la liste à jour
+            chargerConversations();
+        }
+    });
+}
+
+function afficherBulle(m) {
+    const bulle = document.createElement("div");
+    bulle.className = "bulle " + (m.expediteurId === monId ? "envoyee" : "recue");
+    bulle.textContent = m.contenu;
+
+    const heure = document.createElement("span");
+    heure.className = "heure";
+    heure.textContent = m.dateEnvoi.slice(11, 16); // garde juste HH:MM
+    bulle.appendChild(heure);
+
+    const historique = document.getElementById("historique");
+    historique.appendChild(bulle);
+    historique.scrollTop = historique.scrollHeight; // descend en bas
+}
+
+function envoyerMessage() {
+    const champ = document.getElementById("champ-message");
+    const contenu = champ.value.trim();
+
+    if (contenu === "" || !destinataire || !socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+    }
+
+    socket.send(JSON.stringify({
+        type: "message",
+        destinataireId: destinataire.id,
+        contenu: contenu
+    }));
+    champ.value = "";
+}
+
+document.getElementById("btn-envoyer").addEventListener("click", envoyerMessage);
+
+document.getElementById("champ-message").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+        envoyerMessage();
+    }
+});

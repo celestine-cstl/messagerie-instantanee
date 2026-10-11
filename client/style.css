@@ -169,6 +169,17 @@ body {
 
 .infos {
     flex: 1;
+    min-width: 0;
+}
+
+.apercu {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation:hover, .utilisateur:hover {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .nom, .apercu, .statut, #nom-destinataire, #statut-destinataire {

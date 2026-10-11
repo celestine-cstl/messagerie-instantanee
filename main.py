@@ -216,4 +216,36 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
             del connectes[moi]
         await prevenir_statut()
 
+# #### CONVERSATIONS ####
+
+@app.get("/api/conversations")
+def conversations(payload: dict = Depends(utilisateur_courant)):
+    moi = int(payload["sub"])
+    session = SessionLocale()
+
+    # liste de tt les messages du + récent au + ancien
+    messages = session.query(Message).filter(
+        or_(Message.expediteurId == moi, Message.destinataireId == moi)
+    ).order_by(Message.dateEnvoi.desc(), Message.id.desc()).all()
+
+    resultat = []
+    deja_vus = set()
+    for m in messages:
+        autre = m.destinataireId if m.expediteurId == moi else m.expediteurId
+        # le premier message trouvé avec quelqu'un est le dernier échangé
+        if autre == moi or autre in deja_vus:
+            continue
+        deja_vus.add(autre)
+        u = session.get(Utilisateur, autre)
+        resultat.append({
+            "id": u.id,
+            "username": u.username,
+            "connecte": u.id in connectes,
+            "dernierMessage": m.contenu,
+            "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds")
+        })
+
+    session.close()
+    return resultat
+
 app.mount("/", StaticFiles(directory="client", html=True), name="client")

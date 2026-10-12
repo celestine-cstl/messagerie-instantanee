@@ -18,3 +18,4 @@ class Message(Base):
     destinataireId = Column(Integer, ForeignKey("utilisateurs.id"))
     contenu = Column(Text)
     dateEnvoi = Column(DateTime)
+    statut = Column(String(10), default="envoye")  # envoye / livre / lu

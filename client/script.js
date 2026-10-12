@@ -163,6 +163,9 @@ entreeValide("inscription-mdp", "btn-inscription");
 // #### DECONNEXION ####
 
 function deconnecter() {
+    arreterSaisie();
+    autreEcrit = false;
+
     if (socket) {
         socket.close();
         socket = null;
@@ -316,8 +319,11 @@ async function chargerConversations() {
 // #### OUVRIR UNE CONVERSATION ####
 
 async function ouvrirConversation(u) {
-    destinataire = u;
+    arreterSaisie();
+    autreEcrit = false;
+    clearTimeout(minuteurAutre);
 
+    destinataire = u;
     document.getElementById("nom-destinataire").textContent = u.username;
     afficherStatut(u.connecte);
     document.getElementById("historique").innerHTML = "";
@@ -344,9 +350,17 @@ async function ouvrirConversation(u) {
     }
 }
 
-// pastille avec texte en ligne ou hors ligne 
+// pastille avec texte en ligne / hors ligne, ou "en train d'écrire"
 function afficherStatut(connecte) {
-    document.getElementById("statut-destinataire").textContent = connecte ? "En ligne" : "Hors ligne";
+    destinataireConnecte = connecte;
+    const statut = document.getElementById("statut-destinataire");
+    if (autreEcrit && destinataire) {
+        statut.textContent = destinataire.username + " est en train d'écrire…";
+        statut.classList.add("ecrit");
+    } else {
+        statut.textContent = connecte ? "En ligne" : "Hors ligne";
+        statut.classList.remove("ecrit");
+    }
     document.getElementById("pastille-destinataire").classList.toggle("en-ligne", connecte);
 }
 
@@ -354,6 +368,10 @@ function afficherStatut(connecte) {
 const btnRetour = document.getElementById("btn-retour");
 if (btnRetour) {
     btnRetour.addEventListener("click", function () {
+        
+        arreterSaisie();
+        autreEcrit = false;
+
         document.getElementById("zone-messagerie").classList.remove("conversation-ouverte");
         destinataire = null; // on ne regarde plus la conversation
     });
@@ -377,14 +395,23 @@ function connecterSocket() {
             chargerConversations();
         } else if (data.type === "message") {
             if (destinataire && (data.expediteurId === destinataire.id || data.destinataireId === destinataire.id)) {
+                if (data.expediteurId === destinataire.id) {
+                    afficherSaisieAutre(false);
+                }
                 afficherBulle(data);
-                // ACCUSÉ : message reçu pendant que la conversation est ouverte = lu
+                // message reçu pendant que la conversation est ouverte = lu
                 if (data.expediteurId === destinataire.id) {
                     signalerLu();
                 }
             }
             // le dernier message change >> on met la liste à jour
             chargerConversations();
+        } else if (data.type === "saisie") {
+            // on n'affiche l'indicateur que si c'est la personne de la conversation ouverte
+            if (destinataire && data.expediteurId === destinataire.id) {
+                afficherSaisieAutre(data.enTrain);
+            }
+        
         } else if (data.type === "accuse") {
             // ACCUSÉ : le serveur nous dit que nos messages ont changé de statut
             for (const id of data.ids) {
@@ -442,6 +469,55 @@ function signalerLu() {
 // quand on revient sur l'onglet ou l'appli -> la conversation affichée devient lue
 document.addEventListener("visibilitychange", signalerLu);
 
+// #### INDICATEUR DE SAISIE ####
+
+let jeTape = false;              // on a déjà prévenu l'autre qu'on écrit ?
+let minuteurSaisie = null;       // détecte qu'on a arrêté de taper (2 s sans touche)
+let autreEcrit = false;          // la personne affichée est en train d'écrire ?
+let minuteurAutre = null;        // sécurité si le "stop" ne arrive jamais (ex : il ferme l'appli)
+let destinataireConnecte = false;
+
+function envoyerSaisie(enTrain) {
+    if (destinataire && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "saisie", destinataireId: destinataire.id, enTrain: enTrain }));
+    }
+}
+
+// on prévient qu'on a arrêté d'écrire (seulement si on avait dit qu'on écrivait)
+function arreterSaisie() {
+    clearTimeout(minuteurSaisie);
+    if (jeTape) {
+        jeTape = false;
+        envoyerSaisie(false);
+    }
+}
+
+// à chaque touche dans le champ
+document.getElementById("champ-message").addEventListener("input", function () {
+    if (this.value.trim() === "") {
+        arreterSaisie(); // champ vidé = on n'écrit plus
+        return;
+    }
+    // on n'envoie "true" qu'une fois, pas à chaque lettre
+    if (!jeTape) {
+        jeTape = true;
+        envoyerSaisie(true);
+    }
+    // on relance le compte à rebours à chaque touche
+    clearTimeout(minuteurSaisie);
+    minuteurSaisie = setTimeout(arreterSaisie, 2000);
+});
+
+// affiche ou cache "Untel est en train d'écrire…" dans l'en-tête
+function afficherSaisieAutre(enTrain) {
+    autreEcrit = enTrain;
+    clearTimeout(minuteurAutre);
+    if (enTrain) {
+        minuteurAutre = setTimeout(function () { afficherSaisieAutre(false); }, 5000);
+    }
+    afficherStatut(destinataireConnecte);
+}
+
 function envoyerMessage() {
     const champ = document.getElementById("champ-message");
     const contenu = champ.value.trim();
@@ -456,6 +532,7 @@ function envoyerMessage() {
         contenu: contenu
     }));
     champ.value = "";
+    arreterSaisie();
 }
 
 document.getElementById("btn-envoyer").addEventListener("click", envoyerMessage);

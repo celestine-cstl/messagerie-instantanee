@@ -149,7 +149,8 @@ def historique(utilisateurId: int, payload: dict = Depends(utilisateur_courant))
             "expediteurId": m.expediteurId,
             "destinataireId": m.destinataireId,
             "contenu": m.contenu,
-            "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds")
+            "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds"),
+            "statut": m.statut
         }
         for m in messages
     ]
@@ -166,6 +167,29 @@ async def prevenir_statut():
         except Exception:
             pass
 
+# prévient l'expéditeur que certains de ses messages ont changé de statut
+async def envoyer_accuse(expediteurId, ids, statut):
+    if ids and expediteurId in connectes:
+        try:
+            await connectes[expediteurId].send_json({"type": "accuse", "ids": ids, "statut": statut})
+        except Exception:
+            pass
+
+# change en base le statut des messages qui correspondent au filtre, puis prévient les expéditeurs
+async def changer_statut(filtre, nouveau_statut):
+    session = SessionLocale()
+    try:
+        messages = session.query(Message).filter(*filtre).all()
+        par_expediteur = {}  # expediteurId -> liste des ids modifiés
+        for m in messages:
+            m.statut = nouveau_statut
+            par_expediteur.setdefault(m.expediteurId, []).append(m.id)
+        session.commit()
+    finally:
+        session.close()
+    for expediteurId, ids in par_expediteur.items():
+        await envoyer_accuse(expediteurId, ids, nouveau_statut)
+
 @app.websocket("/ws/messages")
 async def canal_messages(websocket: WebSocket, token: str = ""):
     # pas de token valide = pas de connexion
@@ -180,9 +204,22 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
     connectes[moi] = websocket
     await prevenir_statut()
 
+    # les messages reçus pendant qu'on était hors ligne sont maintenant livrés
+    await changer_statut([Message.destinataireId == moi, Message.statut == "envoye"], "livre")
+
     try:
         while True:
             data = await websocket.receive_json()
+            # le client dit qu'il a lu les messages d'un utilisateur
+            if data.get("type") == "lu":
+                try:
+                    expediteurId = int(data.get("expediteurId"))
+                except (TypeError, ValueError):
+                    continue
+                await changer_statut([Message.expediteurId == expediteurId,
+                                      Message.destinataireId == moi,
+                                      Message.statut != "lu"], "lu")
+                continue
             contenu = str(data.get("contenu", "")).strip()
             destinataireId = data.get("destinataireId")
             if contenu == "" or destinataireId is None:
@@ -190,8 +227,10 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
 
             # on enregistre avec l'heure du serveur
             session = SessionLocale()
+             # livré tout de suite si le destinataire est connecté, sinon juste envoyé
+            statut = "livre" if int(destinataireId) in connectes else "envoye"
             m = Message(expediteurId=moi, destinataireId=int(destinataireId),
-                        contenu=contenu, dateEnvoi=datetime.now())
+                        contenu=contenu, dateEnvoi=datetime.now(), statut=statut)
             session.add(m)
             session.commit()
             session.refresh(m)
@@ -199,10 +238,12 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
 
             message = {
                 "type": "message",
+                "id": m.id,
                 "expediteurId": m.expediteurId,
                 "destinataireId": m.destinataireId,
                 "contenu": m.contenu,
-                "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds")
+                "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds"),
+                "statut": m.statut
             }
 
             await websocket.send_json(message)

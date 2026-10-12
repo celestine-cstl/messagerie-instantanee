@@ -338,6 +338,7 @@ async function ouvrirConversation(u) {
         for (const m of messages) {
             afficherBulle(m);
         }
+        signalerLu(); // on vient de lire la conversation
     } catch (e) {
         messageErreur.textContent = "Impossible de joindre le serveur";
     }
@@ -354,6 +355,7 @@ const btnRetour = document.getElementById("btn-retour");
 if (btnRetour) {
     btnRetour.addEventListener("click", function () {
         document.getElementById("zone-messagerie").classList.remove("conversation-ouverte");
+        destinataire = null; // on ne regarde plus la conversation
     });
 }
 
@@ -361,6 +363,9 @@ if (btnRetour) {
 
 function connecterSocket() {
     socket = new WebSocket("ws://" + location.host + "/ws/messages?token=" + token);
+
+    // ACCUSÉ : dès que le canal est ouvert, on signale ce qu'on est en train de lire
+    socket.addEventListener("open", signalerLu);
 
     // à chaque fois que le serveur nous envoie quelque chose
     socket.addEventListener("message", function (e) {
@@ -373,27 +378,69 @@ function connecterSocket() {
         } else if (data.type === "message") {
             if (destinataire && (data.expediteurId === destinataire.id || data.destinataireId === destinataire.id)) {
                 afficherBulle(data);
+                // ACCUSÉ : message reçu pendant que la conversation est ouverte = lu
+                if (data.expediteurId === destinataire.id) {
+                    signalerLu();
+                }
             }
             // le dernier message change >> on met la liste à jour
             chargerConversations();
+        } else if (data.type === "accuse") {
+            // ACCUSÉ : le serveur nous dit que nos messages ont changé de statut
+            for (const id of data.ids) {
+                const coche = document.querySelector('.bulle[data-id="' + id + '"] .coche');
+                if (coche) {
+                    majCoche(coche, data.statut);
+                }
+            }
         }
     });
 }
 
 function afficherBulle(m) {
+    const estEnvoyee = (m.expediteurId === monId);
+
     const bulle = document.createElement("div");
-    bulle.className = "bulle " + (m.expediteurId === monId ? "envoyee" : "recue");
+    bulle.className = "bulle " + (estEnvoyee ? "envoyee" : "recue");
+    bulle.dataset.id = m.id; // ACCUSÉ : pour retrouver la bulle quand l'accusé arrive
     bulle.textContent = m.contenu;
 
     const heure = document.createElement("span");
     heure.className = "heure";
     heure.textContent = m.dateEnvoi.slice(11, 16); // garde juste HH:MM
+
+    // ACCUSÉ : les coches ne s'affichent que sur nos propres messages
+    if (estEnvoyee) {
+        const coche = document.createElement("span");
+        coche.className = "coche";
+        heure.appendChild(coche);
+        majCoche(coche, m.statut);
+    }
+
     bulle.appendChild(heure);
 
     const historique = document.getElementById("historique");
     historique.appendChild(bulle);
     historique.scrollTop = historique.scrollHeight; // descend en bas
 }
+
+// ✓ = envoyé, ✓✓ = livré, ✓✓ en vert = lu
+function majCoche(coche, statut) {
+    coche.textContent = (statut === "envoye") ? " ✓" : " ✓✓";
+    coche.classList.toggle("lu", statut === "lu");
+    coche.title = (statut === "envoye") ? "Envoyé" : (statut === "livre") ? "Livré" : "Lu";
+}
+
+// dit au serveur qu'on a lu les messages de la personne affichée
+function signalerLu() {
+    if (destinataire && socket && socket.readyState === WebSocket.OPEN
+        && document.visibilityState === "visible") {
+        socket.send(JSON.stringify({ type: "lu", expediteurId: destinataire.id }));
+    }
+}
+
+// quand on revient sur l'onglet ou l'appli -> la conversation affichée devient lue
+document.addEventListener("visibilitychange", signalerLu);
 
 function envoyerMessage() {
     const champ = document.getElementById("champ-message");

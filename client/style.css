@@ -371,3 +371,13 @@ body {
         max-width: 80%;
     }
 }
+
+/* accusé de réception */
+.coche {
+    margin-left: 4px;
+    letter-spacing: -3px;
+}
+
+.coche.lu {
+    color: #4ade80;
+}

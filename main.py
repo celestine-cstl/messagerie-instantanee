@@ -241,7 +241,13 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
 
             contenu = str(data.get("contenu", "")).strip()
             destinataireId = data.get("destinataireId")
+
+            # message vide ou avec pas de destinataire >> on ignore
             if contenu == "" or destinataireId is None:
+                continue
+
+            # impossible de s'envoyer des messages à soi-même
+            if int(destinataireId) == moi:
                 continue
 
             # on enregistre avec l'heure du serveur
@@ -254,6 +260,10 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
             session.commit()
             session.refresh(m)
             session.close()
+
+            # si le destinataire n'est pas co alors on simule une notification
+            if statut == "envoye":
+                print("[WEBHOOK] notification envoyée à l'utilisateur", m.destinataireId, ": nouveau message de", payload["username"])
 
             message = {
                 "type": "message",

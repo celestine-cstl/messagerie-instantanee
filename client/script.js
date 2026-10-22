@@ -193,6 +193,13 @@ let destinataire = null; // la personne avec qui on parle
 function afficherOnglet(nom) {
     const estMessages = (nom === "messages");
 
+    const zone = document.getElementById("zone-messagerie");
+    zone.classList.toggle("onglet-utilisateurs", !estMessages);
+    if (!estMessages) {
+        zone.classList.remove("conversation-ouverte");
+        destinataire = null;
+    }
+
     document.getElementById("liste-conversations").style.display = estMessages ? "block" : "none";
     document.getElementById("liste-utilisateurs").style.display = estMessages ? "none" : "block";
     document.getElementById("titre-liste").textContent = estMessages ? "Messages" : "Utilisateurs";
@@ -219,6 +226,14 @@ document.getElementById("onglet-personnes").addEventListener("click", function (
 
 // #### LISTE DES UTILISATEURS ####
 
+// met en surbrillance la personne avec qui on parle, dans les deux listes
+function marquerSelection() {
+    document.querySelectorAll(".conversation, .utilisateur").forEach(function (ligne) {
+        const estChoisie = destinataire !== null && Number(ligne.dataset.id) === destinataire.id;
+        ligne.classList.toggle("selectionne", estChoisie);
+    });
+}
+
 async function chargerUtilisateurs() {
     try {
         const reponse = await fetch("/api/utilisateurs", {
@@ -232,6 +247,15 @@ async function chargerUtilisateurs() {
         }
 
         const utilisateurs = await reponse.json();
+
+        // tri : d'abord les personnes en ligne, puis ordre alphabétique (localeCompare gère les accents)
+        utilisateurs.sort(function (a, b) {
+            if (a.connecte !== b.connecte) {
+                return a.connecte ? -1 : 1;
+            }
+            return a.username.localeCompare(b.username, "fr");
+        });
+
         const liste = document.getElementById("liste-utilisateurs");
         liste.innerHTML = "";
 
@@ -243,6 +267,7 @@ async function chargerUtilisateurs() {
 
             const ligne = document.createElement("div");
             ligne.className = "utilisateur";
+            ligne.dataset.id = u.id;
             ligne.innerHTML = `
                 <div class="avatar"><span class="pastille ${u.connecte ? "en-ligne" : ""}"></span></div>
                 <div class="infos">
@@ -265,6 +290,7 @@ async function chargerUtilisateurs() {
         if (liste.innerHTML === "") {
             liste.innerHTML = '<p class="vide">Personne d\'autre n\'est inscrit pour l\'instant.</p>';
         }
+        marquerSelection();
     } catch (e) {
         messageErreur.textContent = "Impossible de joindre le serveur";
     }
@@ -291,6 +317,7 @@ async function chargerConversations() {
         for (const c of conversations) {
             const ligne = document.createElement("div");
             ligne.className = "conversation";
+            ligne.dataset.id = c.id;
             ligne.innerHTML = `
                 <div class="avatar"><span class="pastille ${c.connecte ? "en-ligne" : ""}"></span></div>
                 <div class="infos">
@@ -311,6 +338,7 @@ async function chargerConversations() {
         if (conversations.length === 0) {
             liste.innerHTML = '<p class="vide">Pas encore de conversation. Va dans l\'onglet "Utilisateurs" pour écrire à quelqu\'un.</p>';
         }
+        marquerSelection();
     } catch (e) {
         messageErreur.textContent = "Impossible de joindre le serveur";
     }
@@ -324,6 +352,7 @@ async function ouvrirConversation(u) {
     clearTimeout(minuteurAutre);
 
     destinataire = u;
+    marquerSelection();
     document.getElementById("nom-destinataire").textContent = u.username;
     afficherStatut(u.connecte);
     document.getElementById("historique").innerHTML = "";
@@ -382,8 +411,19 @@ if (btnRetour) {
 function connecterSocket() {
     socket = new WebSocket("ws://" + location.host + "/ws/messages?token=" + token);
 
-    // ACCUSÉ : dès que le canal est ouvert, on signale ce qu'on est en train de lire
-    socket.addEventListener("open", signalerLu);
+    // dès que le canal est (re)ouvert >> on recharge la conversation affichée
+    socket.addEventListener("open", function () {
+        if (destinataire) {
+            ouvrirConversation(destinataire); // appelle déjà signalerLu() à la fin
+        }
+    });
+
+    // le téléphone coupe la connexion quand l'écran se verrouille >> on se reconnecte tout seul
+    socket.addEventListener("close", function () {
+        if (token) {
+            setTimeout(connecterSocket, 2000);
+        }
+    });
 
     // à chaque fois que le serveur nous envoie quelque chose
     socket.addEventListener("message", function (e) {

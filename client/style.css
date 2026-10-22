@@ -163,10 +163,6 @@ body {
     cursor: pointer;
 }
 
-.conversation.actif {
-    background: rgba(139, 92, 246, 0.3);
-}
-
 .infos {
     flex: 1;
     min-width: 0;
@@ -178,8 +174,10 @@ body {
     text-overflow: ellipsis;
 }
 
-.conversation:hover, .utilisateur:hover {
-    background: rgba(255, 255, 255, 0.06);
+/* la personne choisie reste en surbrillance : un peu plus claire que le survol, avec un trait violet à gauche */
+.conversation.selectionne, .utilisateur.selectionne {
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 4px 0 0 #8b5cf6;
 }
 
 .nom, .apercu, .statut, #nom-destinataire, #statut-destinataire {
@@ -231,6 +229,25 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
+}
+
+/* onglet Utilisateurs, avant de cliquer sur une personne la liste prend toute la place */
+#zone-messagerie.onglet-utilisateurs:not(.conversation-ouverte) #panneau-conversation {
+    display: none;
+}
+
+#zone-messagerie.onglet-utilisateurs:not(.conversation-ouverte) #panneau-liste {
+    flex: 1;
+    border-right: none;
+}
+
+/* sur ordinateur seulement : la liste des utilisateurs en 3 colonnes tant qu'aucune conversation n'est ouverte */
+@media (min-width: 769px) {
+    #zone-messagerie.onglet-utilisateurs:not(.conversation-ouverte) #liste-utilisateurs {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
 }
 
 .entete-conversation {

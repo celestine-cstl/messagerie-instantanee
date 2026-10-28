@@ -191,10 +191,15 @@ body {
 .badge {
     display: inline-block;
     min-width: 20px;
-    padding: 2px 6px;
+    height: 20px;
+    line-height: 20px;
+    padding: 0 6px;
     border-radius: 10px;
     background: #8b5cf6;
     font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    flex-shrink: 0;
 }
 
 /* le rond dégradé + la pastille en ligne */
@@ -400,7 +405,7 @@ body {
 }
 
 /* indicateur de saisie */
-#statut-destinataire.ecrit {
+#statut-destinataire.ecrit, .statut.ecrit {
     color: #a78bfa;
     font-style: italic;
     animation: clignote 1.2s infinite;
@@ -409,4 +414,62 @@ body {
 @keyframes clignote {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* #### RÉACTIONS #### */
+
+.bulle {
+    position: relative; /* pour placer les réactions sur le bas de la bulle */
+    cursor: pointer;
+}
+
+/* de la place sous la bulle pour les réactions */
+.bulle.a-reactions {
+    margin-bottom: 14px;
+}
+
+.reactions {
+    position: absolute;
+    bottom: -16px;
+    left: 10px;
+    padding: 2px 7px;
+    border-radius: 12px;
+    border: 2px solid #0b1033;
+    background: #1e2452;
+    color: white;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.bulle.envoyee .reactions {
+    left: auto;
+    right: 10px;
+}
+
+/* la barre pour choisir un émoji */
+.choix-reactions {
+    align-self: flex-start;
+    display: flex;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 25px;
+    background: #1e2452;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.choix-reactions.envoyee {
+    align-self: flex-end;
+}
+
+.choix-reactions button {
+    padding: 2px;
+    border: none;
+    background: none;
+    font-size: 22px;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.choix-reactions button:hover {
+    transform: scale(1.3);
 }

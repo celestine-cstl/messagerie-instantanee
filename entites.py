@@ -19,3 +19,12 @@ class Message(Base):
     contenu = Column(Text)
     dateEnvoi = Column(DateTime)
     statut = Column(String(10), default="envoye")  # envoye / livre / lu
+
+
+class Reaction(Base):
+    __tablename__ = "reactions"
+
+    id = Column(Integer, primary_key=True)
+    messageId = Column(Integer, ForeignKey("messages.id"))
+    utilisateurId = Column(Integer, ForeignKey("utilisateurs.id"))
+    emoji = Column(String(10))  # une seule réaction par personne et par message

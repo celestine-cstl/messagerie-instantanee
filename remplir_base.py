@@ -9,7 +9,7 @@ import bcrypt
 from sqlalchemy import text
 
 from base_de_donnees import Base, moteur, SessionLocale
-from entites import Utilisateur, Message
+from entites import Utilisateur, Message, Reaction
 
 MOT_DE_PASSE = "Test123"  # le même pour tout le monde (respecte la règle : majuscule + chiffre)
 
@@ -160,6 +160,7 @@ try:
     Base.metadata.create_all(moteur)
 
     # 1. On vide les tables (les messages d'abord, à cause des clés étrangères)
+    session.query(Reaction).delete()  # avant les messages, à cause de la clé étrangère
     session.query(Message).delete()
     session.query(Utilisateur).delete()
     session.commit()

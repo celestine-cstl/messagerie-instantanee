@@ -272,7 +272,7 @@ async function chargerUtilisateurs() {
                 <div class="avatar"><span class="pastille ${u.connecte ? "en-ligne" : ""}"></span></div>
                 <div class="infos">
                     <p class="nom"></p>
-                    <p class="statut">${u.connecte ? "En ligne" : "Hors ligne"}</p>
+                    <p class="statut" data-connecte="${u.connecte}">${u.connecte ? "En ligne" : "Hors ligne"}</p>
                 </div>`;
             ligne.querySelector(".nom").textContent = u.username;
 
@@ -281,6 +281,7 @@ async function chargerUtilisateurs() {
             });
 
             liste.appendChild(ligne);
+            afficherStatutListe(u.id); // "en train d'écrire…" si besoin
 
             if (destinataire && u.id === destinataire.id) {
                 afficherStatut(u.connecte);
@@ -315,6 +316,8 @@ async function chargerConversations() {
         liste.innerHTML = "";
 
         for (const c of conversations) {
+            // conversation ouverte = déjà lue, pas de pastille
+            const nonLus = (destinataire && c.id === destinataire.id) ? 0 : c.nonLus;
             const ligne = document.createElement("div");
             ligne.className = "conversation";
             ligne.dataset.id = c.id;
@@ -324,7 +327,8 @@ async function chargerConversations() {
                     <p class="nom"></p>
                     <p class="apercu"></p>
                 </div>
-                <span class="heure">${c.dateEnvoi.slice(11, 16)}</span>`;
+                <span class="heure">${c.dateEnvoi.slice(11, 16)}</span>
+                ${nonLus > 0 ? `<span class="badge">${nonLus}</span>` : ""}`;
             ligne.querySelector(".nom").textContent = c.username;
             ligne.querySelector(".apercu").textContent = c.dernierMessage;
 
@@ -353,6 +357,11 @@ async function ouvrirConversation(u) {
 
     destinataire = u;
     marquerSelection();
+    // on ouvre la conversation >> sa pastille de non lus disparaît
+    const badge = document.querySelector('.conversation[data-id="' + u.id + '"] .badge');
+    if (badge) {
+        badge.remove();
+    }
     document.getElementById("nom-destinataire").textContent = u.username;
     afficherStatut(u.connecte);
     document.getElementById("historique").innerHTML = "";
@@ -434,6 +443,7 @@ function connecterSocket() {
             chargerUtilisateurs();
             chargerConversations();
         } else if (data.type === "message") {
+            majSaisieListe(data.expediteurId, false); // il a envoyé >> il n'écrit plus
             if (destinataire && (data.expediteurId === destinataire.id || data.destinataireId === destinataire.id)) {
                 if (data.expediteurId === destinataire.id) {
                     afficherSaisieAutre(false);
@@ -447,11 +457,18 @@ function connecterSocket() {
             // le dernier message change >> on met la liste à jour
             chargerConversations();
         } else if (data.type === "saisie") {
+            majSaisieListe(data.expediteurId, data.enTrain); // dans la liste des utilisateurs
             // on n'affiche l'indicateur que si c'est la personne de la conversation ouverte
             if (destinataire && data.expediteurId === destinataire.id) {
                 afficherSaisieAutre(data.enTrain);
             }
         
+        } else if (data.type === "reaction") {
+            // RÉACTIONS : quelqu'un a réagi >> on met à jour la bulle en direct
+            const bulle = document.querySelector('.bulle[data-id="' + data.messageId + '"]');
+            if (bulle) {
+                majReactions(bulle, data.reactions);
+            }
         } else if (data.type === "accuse") {
             // ACCUSÉ : le serveur nous dit que nos messages ont changé de statut
             for (const id of data.ids) {
@@ -485,6 +502,13 @@ function afficherBulle(m) {
     }
 
     bulle.appendChild(heure);
+
+    // RÉACTIONS : celles déjà présentes + clic sur la bulle pour réagir
+    majReactions(bulle, m.reactions || []);
+    bulle.addEventListener("click", function (e) {
+        e.stopPropagation();
+        ouvrirChoixReactions(bulle);
+    });
 
     const historique = document.getElementById("historique");
     historique.appendChild(bulle);
@@ -556,6 +580,93 @@ function afficherSaisieAutre(enTrain) {
         minuteurAutre = setTimeout(function () { afficherSaisieAutre(false); }, 5000);
     }
     afficherStatut(destinataireConnecte);
+}
+
+// #### RÉACTIONS ####
+
+const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"]; // les mêmes que dans main.py
+
+// la barre d'émojis : une seule pour toute la page, on la place sous la bulle choisie
+const choixReactions = document.createElement("div");
+choixReactions.className = "choix-reactions";
+for (const emoji of EMOJIS) {
+    const bouton = document.createElement("button");
+    bouton.textContent = emoji;
+    bouton.addEventListener("click", function (e) {
+        e.stopPropagation();
+        envoyerReaction(Number(choixReactions.dataset.messageId), emoji);
+        choixReactions.remove();
+    });
+    choixReactions.appendChild(bouton);
+}
+
+function ouvrirChoixReactions(bulle) {
+    // déjà ouverte sous cette bulle >> on la ferme
+    if (choixReactions.isConnected && choixReactions.dataset.messageId === bulle.dataset.id) {
+        choixReactions.remove();
+        return;
+    }
+    choixReactions.dataset.messageId = bulle.dataset.id;
+    choixReactions.classList.toggle("envoyee", bulle.classList.contains("envoyee"));
+    bulle.after(choixReactions);
+}
+
+// clic n'importe où ailleurs >> on ferme la barre
+document.addEventListener("click", function () {
+    choixReactions.remove();
+});
+
+function envoyerReaction(messageId, emoji) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "reaction", messageId: messageId, emoji: emoji }));
+    }
+}
+
+// affiche les réactions en petit sur le bas de la bulle, comme WhatsApp : 👍❤️ 2
+function majReactions(bulle, reactions) {
+    let zone = bulle.querySelector(".reactions");
+    if (!zone) {
+        zone = document.createElement("span");
+        zone.className = "reactions";
+        bulle.appendChild(zone);
+    }
+    const emojis = [];
+    for (const r of reactions) {
+        if (!emojis.includes(r.emoji)) {
+            emojis.push(r.emoji);
+        }
+    }
+    zone.textContent = emojis.join("") + (reactions.length > 1 ? " " + reactions.length : "");
+    zone.style.display = reactions.length > 0 ? "" : "none";
+    bulle.classList.toggle("a-reactions", reactions.length > 0);
+}
+
+// #### SAISIE DANS LA LISTE DES UTILISATEURS ####
+
+const ecrivent = {}; // id de ceux qui nous écrivent en ce moment -> leur minuteur de sécurité
+
+function majSaisieListe(id, enTrain) {
+    clearTimeout(ecrivent[id]);
+    delete ecrivent[id];
+    if (enTrain) {
+        ecrivent[id] = setTimeout(function () { majSaisieListe(id, false); }, 5000);
+    }
+    afficherStatutListe(id);
+}
+
+// sous le nom : "est en train d'écrire…" ou "En ligne" / "Hors ligne"
+function afficherStatutListe(id) {
+    const statut = document.querySelector('.utilisateur[data-id="' + id + '"] .statut');
+    if (!statut) {
+        return;
+    }
+    const ecrit = id in ecrivent;
+    if (ecrit) {
+        statut.textContent = "est en train d'écrire…";
+    } else {
+        statut.textContent = statut.dataset.connecte === "true" ? "En ligne" : "Hors ligne";
+    }
+    statut.classList.toggle("ecrit", ecrit);
 }
 
 function envoyerMessage() {

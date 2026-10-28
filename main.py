@@ -9,7 +9,7 @@ import bcrypt
 from datetime import datetime, timedelta, timezone
 import jwt
 from sqlalchemy import or_, and_
-from entites import Utilisateur, Message
+from entites import Utilisateur, Message, Reaction
 
 # crée les tables dans mysql si elles n'existent pas encore
 Base.metadata.create_all(moteur)
@@ -141,6 +141,11 @@ def historique(utilisateurId: int, payload: dict = Depends(utilisateur_courant))
             and_(Message.expediteurId == utilisateurId, Message.destinataireId == moi)
         )
     ).order_by(Message.dateEnvoi).all()
+
+    # les réactions de tous ces messages, rangées par message
+    reactions = {}
+    for r in session.query(Reaction).filter(Reaction.messageId.in_([m.id for m in messages])).all():
+        reactions.setdefault(r.messageId, []).append({"utilisateurId": r.utilisateurId, "emoji": r.emoji})
     session.close()
 
     return [
@@ -150,7 +155,8 @@ def historique(utilisateurId: int, payload: dict = Depends(utilisateur_courant))
             "destinataireId": m.destinataireId,
             "contenu": m.contenu,
             "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds"),
-            "statut": m.statut
+            "statut": m.statut,
+            "reactions": reactions.get(m.id, [])
         }
         for m in messages
     ]
@@ -189,6 +195,14 @@ async def changer_statut(filtre, nouveau_statut):
         session.close()
     for expediteurId, ids in par_expediteur.items():
         await envoyer_accuse(expediteurId, ids, nouveau_statut)
+
+# les émojis autorisés pour les réactions (les mêmes que dans script.js)
+EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+
+# la liste des réactions d'un message
+def reactions_de(session, messageId):
+    return [{"utilisateurId": r.utilisateurId, "emoji": r.emoji}
+            for r in session.query(Reaction).filter_by(messageId=messageId).all()]
 
 @app.websocket("/ws/messages")
 async def canal_messages(websocket: WebSocket, token: str = ""):
@@ -237,6 +251,43 @@ async def canal_messages(websocket: WebSocket, token: str = ""):
                         })
                     except Exception:
                         pass
+                continue
+
+            # le client met, change ou enlève sa réaction sur un message
+            if data.get("type") == "reaction":
+                try:
+                    messageId = int(data.get("messageId"))
+                except (TypeError, ValueError):
+                    continue
+                emoji = str(data.get("emoji", ""))
+                if emoji not in EMOJIS:
+                    continue
+                session = SessionLocale()
+                try:
+                    m = session.get(Message, messageId)
+                    # on ne peut réagir qu'aux messages de ses propres conversations
+                    if m is None or moi not in (m.expediteurId, m.destinataireId):
+                        continue
+                    r = session.query(Reaction).filter_by(messageId=messageId, utilisateurId=moi).first()
+                    if r is None:
+                        session.add(Reaction(messageId=messageId, utilisateurId=moi, emoji=emoji))
+                    elif r.emoji == emoji:
+                        session.delete(r)  # même émoji = on retire sa réaction
+                    else:
+                        r.emoji = emoji    # autre émoji = on remplace
+                    session.commit()
+                    reponse = {"type": "reaction", "messageId": messageId,
+                               "reactions": reactions_de(session, messageId)}
+                    personnes = {m.expediteurId, m.destinataireId}
+                finally:
+                    session.close()
+                # en direct chez les deux personnes de la conversation
+                for idPersonne in personnes:
+                    if idPersonne in connectes:
+                        try:
+                            await connectes[idPersonne].send_json(reponse)
+                        except Exception:
+                            pass
                 continue
 
             contenu = str(data.get("contenu", "")).strip()
@@ -307,12 +358,19 @@ def conversations(payload: dict = Depends(utilisateur_courant)):
             continue
         deja_vus.add(autre)
         u = session.get(Utilisateur, autre)
+        # nombre de messages de cette personne que je n'ai pas encore lus
+        non_lus = session.query(Message).filter(
+            Message.expediteurId == autre,
+            Message.destinataireId == moi,
+            Message.statut != "lu"
+        ).count()
         resultat.append({
             "id": u.id,
             "username": u.username,
             "connecte": u.id in connectes,
             "dernierMessage": m.contenu,
-            "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds")
+            "dateEnvoi": m.dateEnvoi.isoformat(timespec="seconds"),
+            "nonLus": non_lus
         })
 
     session.close()
